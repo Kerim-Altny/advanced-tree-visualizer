@@ -13,8 +13,10 @@ canvas.height = window.innerHeight;
 const NODE_RADIUS = 20;
 const NODE_COLOR = '#FF9F1C';
 const HIGHLIGHT_COLOR = '#00FF00'; // Green for search path
-const TRAVERSE_COLOR = '#39FF14'; // Neon Green for travelsals
+const TRAVERSE_COLOR = '#00F5FF'; // Neon Cyan for traversals
 const TEXT_COLOR = '#FFFFFF';
+const RED_COLOR = '#FF0000'; // Pure Red for RBT
+const BLACK_COLOR = '#333333'; // Dark Gray for RBT Black nodes
 
 // Step Mode Logic
 let isStepMode = false;
@@ -47,24 +49,35 @@ class Node {
         this.targetY = y;
         this.highlightColor = null;
         this.arrowType = null; // 'pre', 'in', 'post'
+        this.color = 'RED'; // Default for RBT
     }
 
     draw(ctx) {
         ctx.beginPath();
         ctx.arc(this.x, this.y, NODE_RADIUS, 0, Math.PI * 2);
 
-        if (this.highlightColor) {
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = this.highlightColor;
+        // Determine fill color
+        let fillColor = this.highlightColor;
+        if (!fillColor) {
+            if (treeType === 'RBT') {
+                fillColor = this.color === 'RED' ? RED_COLOR : BLACK_COLOR;
+            } else {
+                fillColor = NODE_COLOR;
+            }
         }
-
-        ctx.fillStyle = this.highlightColor || NODE_COLOR;
+        ctx.fillStyle = fillColor;
         ctx.fill();
 
-        ctx.shadowBlur = 0; // Reset
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        // Border for Black nodes in RBT
+        if (treeType === 'RBT' && !this.highlightColor && this.color === 'BLACK') {
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        } else {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
 
         ctx.fillStyle = TEXT_COLOR;
         ctx.font = 'bold 14px Arial';
@@ -72,6 +85,7 @@ class Node {
         ctx.textBaseline = 'middle';
         ctx.fillText(this.value, this.x, this.y);
 
+        // Draw Arrows for Traversal
         if (this.arrowType) {
             this.drawArrow(ctx);
         }
@@ -125,15 +139,152 @@ class Tree {
 
         if (!this.root) {
             this.root = new Node(value, canvas.width / 2, 60);
+            if (treeType === 'RBT') this.root.color = 'BLACK';
         } else {
             if (treeType === 'BST') {
                 this.insertNode(this.root, value);
-            } else {
+            } else if (treeType === 'AVL') {
                 this.root = await this.insertAVL(this.root, value);
+            } else if (treeType === 'RBT') {
+                await this.insertRBT(value);
             }
         }
         this.updatePositions();
         this.updateStats();
+    }
+
+    async insertRBT(value) {
+        // Standard BST Insert
+        let newNode = new Node(value, this.root.x, this.root.y); // Start at root pos
+        let current = this.root;
+        let parent = null;
+
+        while (current) {
+            parent = current;
+            if (value < current.value) {
+                current = current.left;
+            } else if (value > current.value) {
+                current = current.right;
+            } else {
+                return; // Duplicate
+            }
+        }
+
+        newNode.parent = parent; // Need parent pointers for RBT
+        if (value < parent.value) {
+            parent.left = newNode;
+        } else {
+            parent.right = newNode;
+        }
+
+        this.updatePositions(); // Show insertion
+        await waitStep(500);
+
+        await this.fixViolation(newNode);
+    }
+
+    async fixViolation(node) {
+        let parent = null;
+        let grandParent = null;
+
+        while (node !== this.root && node.color === 'RED' && node.parent && node.parent.color === 'RED') {
+            parent = node.parent;
+            grandParent = node.parent.parent;
+
+            if (parent === grandParent.left) {
+                let uncle = grandParent.right;
+
+                if (uncle && uncle.color === 'RED') {
+                    // Case 1: Uncle is Red -> Recolor
+                    grandParent.color = 'RED';
+                    parent.color = 'BLACK';
+                    uncle.color = 'BLACK';
+                    node = grandParent;
+                    this.updatePositions();
+                    await this.showRotationMessage(grandParent, "Recoloring");
+                } else {
+                    // Case 2: Uncle is Black
+                    if (node === parent.right) {
+                        // Left Rotation
+                        await this.showRotationMessage(parent, "Left Rotation");
+                        this.rotateLeftRBT(parent);
+                        node = parent;
+                        parent = node.parent;
+                    }
+                    // Right Rotation
+                    await this.showRotationMessage(grandParent, "Right Rotation");
+                    this.rotateRightRBT(grandParent);
+
+                    // Swap colors
+                    let tempColor = parent.color;
+                    parent.color = grandParent.color;
+                    grandParent.color = tempColor;
+
+                    node = parent;
+                }
+            } else {
+                let uncle = grandParent.left;
+
+                if (uncle && uncle.color === 'RED') {
+                    // Case 1: Uncle is Red -> Recolor
+                    grandParent.color = 'RED';
+                    parent.color = 'BLACK';
+                    uncle.color = 'BLACK';
+                    node = grandParent;
+                    this.updatePositions();
+                    await this.showRotationMessage(grandParent, "Recoloring");
+                } else {
+                    // Case 2: Uncle is Black
+                    if (node === parent.left) {
+                        // Right Rotation
+                        await this.showRotationMessage(parent, "Right Rotation");
+                        this.rotateRightRBT(parent);
+                        node = parent;
+                        parent = node.parent;
+                    }
+                    // Left Rotation
+                    await this.showRotationMessage(grandParent, "Left Rotation");
+                    this.rotateLeftRBT(grandParent);
+
+                    // Swap colors
+                    let tempColor = parent.color;
+                    parent.color = grandParent.color;
+                    grandParent.color = tempColor;
+
+                    node = parent;
+                }
+            }
+        }
+        this.root.color = 'BLACK';
+        this.updatePositions();
+    }
+
+    rotateLeftRBT(node) {
+        let rightChild = node.right;
+        node.right = rightChild.left;
+        if (node.right) node.right.parent = node;
+
+        rightChild.parent = node.parent;
+        if (!node.parent) this.root = rightChild;
+        else if (node === node.parent.left) node.parent.left = rightChild;
+        else node.parent.right = rightChild;
+
+        rightChild.left = node;
+        node.parent = rightChild;
+    }
+
+    rotateRightRBT(node) {
+        let leftChild = node.left;
+        node.left = leftChild.right;
+        if (node.left) node.left.parent = node;
+
+        leftChild.parent = node.parent;
+        if (!node.parent) this.root = leftChild;
+        else if (node === node.parent.right) node.parent.right = leftChild;
+        else node.parent.left = leftChild;
+
+        leftChild.right = node;
+        node.parent = leftChild;
     }
 
     async animateDrop(value, targetX, targetY) {
@@ -151,12 +302,14 @@ class Tree {
         if (value < node.value) {
             if (node.left === null) {
                 node.left = new Node(value, node.x, node.y);
+                node.left.parent = node; // Maintain parent for RBT if needed later
             } else {
                 this.insertNode(node.left, value);
             }
         } else {
             if (node.right === null) {
                 node.right = new Node(value, node.x, node.y);
+                node.right.parent = node; // Maintain parent for RBT if needed later
             } else {
                 this.insertNode(node.right, value);
             }
@@ -312,7 +465,10 @@ class Tree {
     }
 
     async showRotationMessage(node, msg) {
-        node.highlightColor = '#FF0000'; // Red for imbalance
+        // In RBT, nodes are Red/Black, so highlight in Orange.
+        // In AVL, nodes are Orange, so highlight in Red.
+        node.highlightColor = treeType === 'RBT' ? '#FF9F1C' : '#FF0000';
+
         rotationMessage.innerText = `Performing ${msg} on Node ${node.value}`;
         rotationMessage.style.display = 'block';
         await waitStep(1500); // Slow animation
