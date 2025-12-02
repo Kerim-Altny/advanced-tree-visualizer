@@ -3,6 +3,9 @@ const ctx = canvas.getContext('2d');
 const outputContent = document.getElementById('outputContent');
 const outputPanel = document.querySelector('.output-panel');
 const outputLabel = document.getElementById('outputLabel');
+const statHeight = document.getElementById('statHeight');
+const statTotal = document.getElementById('statTotal');
+const statLeaves = document.getElementById('statLeaves');
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
@@ -10,11 +13,24 @@ canvas.height = window.innerHeight;
 const NODE_RADIUS = 20;
 const NODE_COLOR = '#FF9F1C';
 const HIGHLIGHT_COLOR = '#00FF00'; // Green for search path
-const TRAVERSE_COLOR = '#00F5FF'; // Neon Cyan for traversals
+const TRAVERSE_COLOR = '#39FF14'; // Neon Green for travelsals
 const TEXT_COLOR = '#FFFFFF';
 
-// Helper for delays
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Step Mode Logic
+let isStepMode = false;
+let nextStepResolver = null;
+const nextStepBtn = document.getElementById('nextStepBtn');
+
+// Helper for delays/steps
+const waitStep = async (ms = 500) => {
+    if (isStepMode) {
+        nextStepBtn.disabled = false;
+        await new Promise(resolve => nextStepResolver = resolve);
+        nextStepBtn.disabled = true;
+    } else {
+        await new Promise(resolve => setTimeout(resolve, ms));
+    }
+};
 
 class Node {
     constructor(value, x, y) {
@@ -96,6 +112,7 @@ class Tree {
             this.insertNode(this.root, value);
         }
         this.updatePositions();
+        this.updateStats();
     }
 
     insertNode(node, value) {
@@ -117,6 +134,7 @@ class Tree {
     delete(value) {
         this.root = this.deleteNode(this.root, value);
         this.updatePositions();
+        this.updateStats();
     }
 
     deleteNode(node, key) {
@@ -157,7 +175,7 @@ class Tree {
         let current = this.root;
         while (current) {
             current.highlightColor = HIGHLIGHT_COLOR;
-            await sleep(500);
+            await waitStep(500);
             if (value === current.value) {
                 return; // Found, leave highlighted
             }
@@ -182,7 +200,7 @@ class Tree {
         outputLabel.innerText = 'PreOrder:';
         outputContent.innerText = '';
         await this.preOrderHelper(this.root);
-        await sleep(1000);
+        await waitStep(1000); // Replaced sleep with waitStep
         this.clearHighlights();
     }
 
@@ -191,7 +209,7 @@ class Tree {
         node.highlightColor = TRAVERSE_COLOR;
         node.arrowType = 'pre';
         outputContent.innerText += node.value + '➝';
-        await sleep(800);
+        await waitStep(800);
         node.arrowType = null;
         await this.preOrderHelper(node.left);
         await this.preOrderHelper(node.right);
@@ -203,7 +221,7 @@ class Tree {
         outputLabel.innerText = 'InOrder:';
         outputContent.innerText = '';
         await this.inOrderHelper(this.root);
-        await sleep(1000);
+        await waitStep(1000); // Replaced sleep with waitStep
         this.clearHighlights();
     }
 
@@ -213,7 +231,7 @@ class Tree {
         node.highlightColor = TRAVERSE_COLOR;
         node.arrowType = 'in';
         outputContent.innerText += node.value + '➝';
-        await sleep(800);
+        await waitStep(800);
         node.arrowType = null;
         await this.inOrderHelper(node.right);
     }
@@ -224,7 +242,7 @@ class Tree {
         outputLabel.innerText = 'PostOrder:';
         outputContent.innerText = '';
         await this.postOrderHelper(this.root);
-        await sleep(1000);
+        await waitStep(1000); // Replaced sleep with waitStep
         this.clearHighlights();
     }
 
@@ -235,7 +253,7 @@ class Tree {
         node.highlightColor = TRAVERSE_COLOR;
         node.arrowType = 'post';
         outputContent.innerText += node.value + '➝';
-        await sleep(800);
+        await waitStep(800);
         node.arrowType = null;
     }
 
@@ -244,6 +262,7 @@ class Tree {
         this.inOrderCollect(this.root, nodes);
         this.root = this.buildBalanced(nodes, 0, nodes.length - 1);
         this.updatePositions();
+        this.updateStats();
     }
 
     inOrderCollect(node, list) {
@@ -265,6 +284,7 @@ class Tree {
     clear() {
         this.root = null;
         this.updatePositions();
+        this.updateStats();
         outputPanel.style.display = 'none';
         outputContent.innerText = '';
     }
@@ -297,21 +317,109 @@ class Tree {
         this.recalculatePositions(node.left, x - gap, y + 80, gap / 2);
         this.recalculatePositions(node.right, x + gap, y + 80, gap / 2);
     }
+
+    updateStats() {
+        const height = this.calculateHeight(this.root);
+        const total = this.countNodes(this.root);
+        const leaves = this.countLeaves(this.root);
+
+        statHeight.innerText = height;
+        statTotal.innerText = total;
+        statLeaves.innerText = leaves;
+    }
+
+    calculateHeight(node) {
+        if (!node) return 0;
+        return 1 + Math.max(this.calculateHeight(node.left), this.calculateHeight(node.right));
+    }
+
+    countNodes(node) {
+        if (!node) return 0;
+        return 1 + this.countNodes(node.left) + this.countNodes(node.right);
+    }
+
+    countLeaves(node) {
+        if (!node) return 0;
+        if (!node.left && !node.right) return 1;
+        return this.countLeaves(node.left) + this.countLeaves(node.right);
+    }
 }
 
 const bst = new Tree();
+const camera = { x: 0, y: 0, zoom: 1 };
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
 
 // Animation Loop
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.zoom, camera.zoom);
 
     if (bst.root) {
         drawConnections(bst.root);
         drawNodes(bst.root);
     }
 
+    ctx.restore();
     requestAnimationFrame(animate);
 }
+
+// Canvas Interactions
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomIntensity = 0.1;
+    const delta = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
+    const newZoom = camera.zoom + delta;
+
+    // Limit zoom
+    if (newZoom > 0.1 && newZoom < 5) {
+        // Zoom towards mouse pointer
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+
+        // Calculate mouse position in world space before zoom
+        const worldX = (mouseX - camera.x) / camera.zoom;
+        const worldY = (mouseY - camera.y) / camera.zoom;
+
+        camera.zoom = newZoom;
+
+        // Adjust camera to keep mouse position stable
+        camera.x = mouseX - worldX * camera.zoom;
+        camera.y = mouseY - worldY * camera.zoom;
+    }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    canvas.style.cursor = 'grabbing';
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+        camera.x += dx;
+        camera.y += dy;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    }
+});
+
+canvas.addEventListener('mouseup', () => {
+    isDragging = false;
+    canvas.style.cursor = 'default';
+});
+
+canvas.addEventListener('mouseleave', () => {
+    isDragging = false;
+    canvas.style.cursor = 'default';
+});
 
 function drawConnections(node) {
     if (node.left) {
@@ -399,9 +507,24 @@ document.getElementById('randomBtn').addEventListener('click', async () => {
     for (let i = 0; i < 15; i++) {
         const val = Math.floor(Math.random() * 100) + 1;
         bst.insert(val);
-        await sleep(500); // Wait for animation (approximate)
+        await waitStep(500); // Wait for animation (approximate)
     }
     toggleButtons(false);
+});
+
+// Mode Selector Logic
+document.querySelectorAll('input[name="mode"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        isStepMode = e.target.value === 'step';
+        nextStepBtn.disabled = true;
+    });
+});
+
+nextStepBtn.addEventListener('click', () => {
+    if (nextStepResolver) {
+        nextStepResolver();
+        nextStepResolver = null;
+    }
 });
 
 function toggleButtons(disabled) {

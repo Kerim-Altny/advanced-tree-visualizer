@@ -12,6 +12,58 @@ canvas {
     height: 100vh;
 }
 
+.stats-panel {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(30, 30, 46, 0.8);
+    backdrop-filter: blur(10px);
+    padding: 15px 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    min-width: 150px;
+}
+
+.stats-panel h3 {
+    margin: 0 0 10px 0;
+    color: #FF9F1C;
+    font-size: 1.1em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 5px;
+}
+
+.stat-item {
+    margin: 5px 0;
+    font-size: 0.95em;
+    display: flex;
+    justify-content: space-between;
+}
+
+.mode-selector {
+    display: flex;
+    gap: 10px;
+    background: #2A2A3C;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #444;
+}
+
+.mode-selector label {
+    cursor: pointer;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.stat-item span {
+    font-weight: bold;
+    color: #00F5FF;
+}
+
 .output-panel {
     position: fixed;
     bottom: 90px;
