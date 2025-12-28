@@ -124,6 +124,8 @@ class Tree {
         this.root = null;
         this.droppingNode = null;
         this.heap = []; // Array to store heap nodes
+        this.graphNodes = []; // Array of nodes for Graph
+        this.adjList = new Map(); // Map<Node, Node[]> for Graph edges
     }
 
     async insert(value) {
@@ -629,6 +631,224 @@ class Tree {
         return node;
     }
 
+    // --- Graph Methods ---
+
+    async generateRandomGraph() {
+        this.clear();
+        const numNodes = 7 + Math.floor(Math.random() * 6); // 7-12 nodes
+
+        // 1. Create Nodes
+        for (let i = 0; i < numNodes; i++) {
+            const x = canvas.width / 2 + (Math.random() - 0.5) * 50;
+            const y = canvas.height / 2 + (Math.random() - 0.5) * 50;
+            const node = new Node(i + 1, x, y);
+            node.color = NODE_COLOR;
+            this.graphNodes.push(node);
+            this.adjList.set(node, []);
+        }
+
+        // 2. Create Edges
+        for (let i = 0; i < numNodes; i++) {
+            for (let j = i + 1; j < numNodes; j++) {
+                if (Math.random() < 0.20) {
+                    this.addEdge(this.graphNodes[i], this.graphNodes[j]);
+                }
+            }
+        }
+
+        // Ensure connectivity
+        this.graphNodes.forEach(node => {
+            if (this.adjList.get(node).length === 0) {
+                const other = this.graphNodes[Math.floor(Math.random() * numNodes)];
+                if (other !== node) this.addEdge(node, other);
+            }
+        });
+
+        this.applyForceDirectedLayout();
+        this.updateAdjListUI();
+    }
+
+    applyForceDirectedLayout() {
+        const width = canvas.width;
+        const height = canvas.height;
+        const k = Math.sqrt((width * height) / this.graphNodes.length) * 0.6;
+        const iterations = 200;
+        const center = { x: width / 2, y: height / 2 };
+
+        for (let i = 0; i < iterations; i++) {
+            this.graphNodes.forEach(v => {
+                v.dx = 0; v.dy = 0;
+                this.graphNodes.forEach(u => {
+                    if (u !== v) {
+                        const deltaX = v.x - u.x;
+                        const deltaY = v.y - u.y;
+                        const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY) || 1;
+                        const force = (k * k) / dist;
+                        v.dx += (deltaX / dist) * force;
+                        v.dy += (deltaY / dist) * force;
+                    }
+                });
+            });
+
+            this.graphNodes.forEach(v => {
+                const neighbors = this.adjList.get(v) || [];
+                neighbors.forEach(u => {
+                    const deltaX = v.x - u.x;
+                    const deltaY = v.y - u.y;
+                    const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY) || 1;
+                    const force = (dist * dist) / k;
+                    v.dx -= (deltaX / dist) * force;
+                    v.dy -= (deltaY / dist) * force;
+                });
+            });
+
+            this.graphNodes.forEach(v => {
+                v.dx -= (v.x - center.x) * 0.05;
+                v.dy -= (v.y - center.y) * 0.05;
+                const d = Math.sqrt(v.dx * v.dx + v.dy * v.dy);
+                const maxD = Math.min(d, 30);
+                v.x += (v.dx / d) * maxD || 0;
+                v.y += (v.dy / d) * maxD || 0;
+                v.x = Math.max(80, Math.min(width - 80, v.x));
+                v.y = Math.max(80, Math.min(height - 80, v.y));
+                v.targetX = v.x;
+                v.targetY = v.y;
+            });
+        }
+        this.updatePositions();
+    }
+
+    updateAdjListUI() {
+        const adjListContent = document.getElementById('adjListContent');
+        if (!adjListContent) return;
+        let html = '<div style="font-family: monospace; font-size: 14px; max-height: 200px; overflow-y: auto;">';
+        const sortedNodes = [...this.graphNodes].sort((a, b) => a.value - b.value);
+        sortedNodes.forEach(node => {
+            const neighbors = this.adjList.get(node) || [];
+            const nStr = neighbors.map(n => n.value).sort((a, b) => a - b).join(', ');
+            html += `<div><strong>${node.value}:</strong> [${nStr}]</div>`;
+        });
+        html += '</div>';
+        adjListContent.innerHTML = html;
+    }
+
+    addEdge(u, v) {
+        if (!this.adjList.get(u).includes(v)) this.adjList.get(u).push(v);
+        if (!this.adjList.get(v).includes(u)) this.adjList.get(v).push(u);
+    }
+
+    drawGraph(ctx) {
+        // Draw Edges
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        const drawnEdges = new Set();
+
+        this.graphNodes.forEach(node => {
+            const neighbors = this.adjList.get(node) || [];
+            neighbors.forEach(neighbor => {
+                // Unique Edge ID for check
+                const edgeId = [node.value, neighbor.value].sort().join('-');
+                if (!drawnEdges.has(edgeId)) {
+                    ctx.beginPath();
+                    ctx.moveTo(node.x, node.y);
+                    ctx.lineTo(neighbor.x, neighbor.y);
+                    ctx.stroke();
+                    drawnEdges.add(edgeId);
+                }
+            });
+        });
+
+        // Draw Nodes
+        this.graphNodes.forEach(node => node.draw(ctx));
+    }
+
+    async bfs() {
+        if (this.graphNodes.length === 0) return;
+        this.clearHighlights();
+
+        // Determine start node
+        const inputVal = parseInt(valueInput.value);
+        let startNode = this.graphNodes[0];
+
+        if (!isNaN(inputVal)) {
+            const found = this.graphNodes.find(n => n.value === inputVal);
+            if (found) startNode = found;
+            else {
+                alert(`Node ${inputVal} not found. Starting from ${startNode.value}.`);
+            }
+        }
+
+        outputPanel.style.display = 'flex';
+        outputLabel.innerText = 'BFS:';
+        outputContent.innerText = '';
+
+        const visited = new Set();
+        const queue = [startNode];
+        visited.add(startNode);
+
+        while (queue.length > 0) {
+            const node = queue.shift();
+
+            // Visualize Visit
+            node.highlightColor = TRAVERSE_COLOR;
+            outputContent.innerText += node.value + '➝';
+            await waitStep(800);
+
+            const neighbors = this.adjList.get(node) || [];
+            for (const neighbor of neighbors) {
+                if (!visited.has(neighbor)) {
+                    visited.add(neighbor);
+                    queue.push(neighbor);
+                    // Visualize Discovery
+                    neighbor.highlightColor = HIGHLIGHT_COLOR; // Green for discovered
+                    await waitStep(400);
+                }
+            }
+            node.highlightColor = '#555'; // Visited/Processed color (Dark Grey/Dim)
+        }
+        this.clearHighlights();
+    }
+
+    async dfs() {
+        if (this.graphNodes.length === 0) return;
+        this.clearHighlights();
+
+        // Determine start node
+        const inputVal = parseInt(valueInput.value);
+        let startNode = this.graphNodes[0];
+
+        if (!isNaN(inputVal)) {
+            const found = this.graphNodes.find(n => n.value === inputVal);
+            if (found) startNode = found;
+            else {
+                alert(`Node ${inputVal} not found. Starting from ${startNode.value}.`);
+            }
+        }
+
+        outputPanel.style.display = 'flex';
+        outputLabel.innerText = 'DFS:';
+        outputContent.innerText = '';
+
+        const visited = new Set();
+        await this.dfsHelper(startNode, visited);
+        this.clearHighlights();
+    }
+
+    async dfsHelper(node, visited) {
+        visited.add(node);
+        node.highlightColor = TRAVERSE_COLOR;
+        outputContent.innerText += node.value + '➝';
+        await waitStep(800);
+
+        const neighbors = this.adjList.get(node) || [];
+        for (const neighbor of neighbors) {
+            if (!visited.has(neighbor)) {
+                await this.dfsHelper(neighbor, visited);
+            }
+        }
+        node.highlightColor = '#555'; // Backtracked
+    }
+
     async delete(value) {
         if (treeType === 'MinHeap' || treeType === 'MaxHeap') {
             await this.deleteHeap(); // Deletes root regardless of value input
@@ -897,6 +1117,8 @@ class Tree {
     clear() {
         this.root = null;
         this.heap = [];
+        this.graphNodes = [];
+        this.adjList.clear();
         this.updatePositions();
         this.updateStats();
         outputPanel.style.display = 'none';
@@ -976,6 +1198,8 @@ function animate() {
     if (bst.root) {
         drawConnections(bst.root);
         drawNodes(bst.root);
+    } else if (treeType === 'Graph') {
+        bst.drawGraph(ctx);
     }
 
     if (bst.droppingNode) {
@@ -1196,6 +1420,25 @@ nextStepBtn.addEventListener('click', () => {
     }
 });
 
+// Graph Controls
+document.getElementById('randomGraphBtn').addEventListener('click', async () => {
+    toggleButtons(true);
+    await bst.generateRandomGraph();
+    toggleButtons(false);
+});
+
+document.getElementById('bfsBtn').addEventListener('click', async () => {
+    toggleButtons(true);
+    await bst.bfs();
+    toggleButtons(false);
+});
+
+document.getElementById('dfsBtn').addEventListener('click', async () => {
+    toggleButtons(true);
+    await bst.dfs();
+    toggleButtons(false);
+});
+
 treeTypeSelect.addEventListener('change', (e) => {
     treeType = e.target.value;
     bst.clear();
@@ -1228,23 +1471,56 @@ function updateButtonStates() {
     const buildHeapBtn = document.getElementById('buildHeapBtn');
     const deleteBtn = document.getElementById('deleteBtn');
     const searchBtn = document.getElementById('searchBtn');
+    const randomGraphBtn = document.getElementById('randomGraphBtn');
+    const bfsBtn = document.getElementById('bfsBtn');
+    const dfsBtn = document.getElementById('dfsBtn');
+    const randomBtn = document.getElementById('randomBtn'); // specific tree random
+    const insertBtn = document.getElementById('insertBtn');
+
+    // Default: Reset all special buttons
+    buildHeapBtn.style.display = 'none';
+    randomGraphBtn.style.display = 'none';
+    bfsBtn.style.display = 'none';
+    dfsBtn.style.display = 'none';
+    randomBtn.style.display = 'inline-block';
+    insertBtn.style.display = 'inline-block';
 
     if (treeType === 'LLRBT') {
         btnsToHide.forEach(btn => btn.style.display = 'none');
-        buildHeapBtn.style.display = 'none';
-        searchBtn.disabled = false; // Search works for LLRBT/BST/AVL
+        searchBtn.disabled = false;
     } else if (treeType === 'MinHeap' || treeType === 'MaxHeap') {
         btnsToHide.forEach(btn => btn.style.display = 'none');
-        // Show delete (modified) and build heap
         deleteBtn.innerText = (treeType === 'MinHeap') ? "Del Min" : "Del Max";
         deleteBtn.style.display = 'inline-block';
         buildHeapBtn.style.display = 'inline-block';
-        searchBtn.disabled = true; // No efficient search in Heap, user requested removal
+        searchBtn.disabled = true;
         searchBtn.style.display = 'none';
+    } else if (treeType === 'Graph') {
+        btnsToHide.forEach(btn => btn.style.display = 'none');
+        deleteBtn.style.display = 'none';
+        searchBtn.style.display = 'none';
+        randomBtn.style.display = 'none';
+        insertBtn.style.display = 'none'; // Hide insert
+
+        // Show Graph buttons
+        randomGraphBtn.style.display = 'inline-block';
+        bfsBtn.style.display = 'inline-block';
+        dfsBtn.style.display = 'inline-block';
+
+        // Toggle Panels
+        const statsPanel = document.querySelector('.stats-panel');
+        const adjPanel = document.querySelector('.adj-panel');
+        if (statsPanel) statsPanel.style.display = 'none';
+        if (adjPanel) adjPanel.style.display = 'block';
     } else {
+        // Show Stats, Hide Adj
+        const statsPanel = document.querySelector('.stats-panel');
+        const adjPanel = document.querySelector('.adj-panel');
+        if (statsPanel) statsPanel.style.display = 'block';
+        if (adjPanel) adjPanel.style.display = 'none';
+
         btnsToHide.forEach(btn => btn.style.display = 'inline-block');
         deleteBtn.innerText = "Delete";
-        buildHeapBtn.style.display = 'none';
         searchBtn.disabled = false;
         searchBtn.style.display = 'inline-block';
     }

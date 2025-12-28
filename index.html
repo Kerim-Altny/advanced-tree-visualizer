@@ -9,7 +9,7 @@
 </head>
 
 <div class="tree-type-selector">
-    <label for="treeType">Tree Type:</label>
+    <label for="treeType">Type:</label>
     <select id="treeType">
         <option value="BST">BST</option>
         <option value="AVL">AVL</option>
@@ -17,6 +17,7 @@
         <option value="LLRBT">Left-Leaning RBT</option>
         <option value="MinHeap">Min Heap</option>
         <option value="MaxHeap">Max Heap</option>
+        <option value="Graph">Graph</option>
     </select>
 </div>
 <div id="rotationMessage" class="rotation-message"></div>
@@ -26,6 +27,10 @@
     <div class="stat-item">Height: <span id="statHeight">0</span></div>
     <div class="stat-item">Nodes: <span id="statTotal">0</span></div>
     <div class="stat-item">Leaves: <span id="statLeaves">0</span></div>
+</div>
+<div class="adj-panel" style="display: none;">
+    <h3>Adjacency List</h3>
+    <div id="adjListContent"></div>
 </div>
 <canvas id="bstCanvas"></canvas>
 <div class="output-panel">
@@ -49,6 +54,9 @@
     <button id="postOrderBtn">PostOrder</button>
     <span class="divider">|</span>
     <button id="buildHeapBtn" style="display: none;">Build Heap</button>
+    <button id="randomGraphBtn" style="display: none;">Random Graph</button>
+    <button id="bfsBtn" style="display: none;">BFS</button>
+    <button id="dfsBtn" style="display: none;">DFS</button>
     <button id="balanceBtn">Balance</button>
     <button id="randomBtn">Random Tree</button>
     <button id="clearBtn">Clear</button>
