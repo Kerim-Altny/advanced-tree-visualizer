@@ -1,4 +1,4 @@
-# 🌳 Advanced Tree Data Structure Visualizer
+# 🌳 Advanced  Data Structure Visualizer
 
 ![Project Status](https://img.shields.io/badge/Status-Completed-success?style=for-the-badge)
 ![Tech Stack](https://img.shields.io/badge/HTML5--Canvas-JavaScript-yellow?style=for-the-badge)
@@ -21,13 +21,25 @@ The goal is to demystify complex concepts like **AVL Rotations**, **Red-Black Re
 
 ## ✨ Key Features
 
-### 🌲 Supported Tree Structures
+### 🌳 Tree Data Structures
 * **BST (Binary Search Tree):** Standard logic. Great for visualizing worst-case scenarios (unbalanced linear chains).
 * **AVL Tree:** Self-balancing tree. Automatically maintains $O(\log n)$ height.
     * Visualizes **Single Rotations** (LL, RR) and **Double Rotations** (LR, RL) in real-time.
-* **Red-Black Tree:** Complex self-balancing structure.
-    * Visualizes **Color Flipping (Recoloring)** and **Restructuring**.
-    * optimized for Dark Mode with high-contrast Red/Black node designs.
+* **Red-Black Tree (RBT):** Complex self-balancing structure.
+    * Visualizes **Color Flipping** and **Restructuring**.
+    * Optimized for Dark Mode with high-contrast Red/Black node designs.
+* **LLRBT (Left-Leaning Red-Black Tree):** A variant of RBT that simplifies implementation by enforcing left-leaning red links (simulating 2-3 trees).
+
+### 🏔️ Heap Structures
+* **Min Heap & Max Heap:** * Visualizes the complete binary tree structure.
+    * Features animations for **Insert (Bubble Up)**, **Extract Min/Max (Bubble Down)**, and **Build Heap** from a random array.
+
+### 🕸️ Graph Algorithms
+* **Force-Directed Graph:**
+    * Generates random graphs using physics-based simulation (nodes repel, edges attract) to create clean, non-overlapping layouts.
+* **Graph Traversals:**
+    * **BFS (Breadth-First Search):** Visualizes the layer-by-layer exploration of the graph.
+    * **DFS (Depth-First Search):** Visualizes the deep exploration path and backtracking.
 
 ### 🎮 Interactive Controls
 * **Infinite Canvas:** Full **Zoom & Pan** support. Navigate large trees by dragging the canvas and zooming with the mouse wheel.
@@ -47,7 +59,6 @@ The goal is to demystify complex concepts like **AVL Rotations**, **Red-Black Re
 * **Core:** HTML5 Canvas API (for high-performance rendering).
 * **Styling:** CSS3 (Modern Dark Theme, Responsive Layout).
 * **Logic:** Vanilla JavaScript (ES6+, Object-Oriented Design).
-* **Architecture:** Custom `Node` and `Tree` classes with async animation handling.
 
 ## 🚀 Installation & Usage
 
