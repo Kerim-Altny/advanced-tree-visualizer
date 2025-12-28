@@ -61,6 +61,8 @@ class Node {
         if (!fillColor) {
             if (treeType === 'RBT') {
                 fillColor = this.color === 'RED' ? RED_COLOR : BLACK_COLOR;
+            } else if (treeType === 'LLRBT') {
+                fillColor = BLACK_COLOR; // Nodes are always black/uniform in LLRBT visualization
             } else {
                 fillColor = NODE_COLOR;
             }
@@ -69,7 +71,7 @@ class Node {
         ctx.fill();
 
         // Border for Black nodes in RBT
-        if (treeType === 'RBT' && !this.highlightColor && this.color === 'BLACK') {
+        if ((treeType === 'RBT' || treeType === 'LLRBT') && !this.highlightColor && this.color === 'BLACK') {
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 3;
             ctx.stroke();
@@ -121,6 +123,7 @@ class Tree {
     constructor() {
         this.root = null;
         this.droppingNode = null;
+        this.heap = []; // Array to store heap nodes
     }
 
     async insert(value) {
@@ -137,9 +140,11 @@ class Tree {
         // Sky Drop Animation
         await this.animateDrop(value, targetX, targetY);
 
-        if (!this.root) {
+        if (treeType === 'MinHeap' || treeType === 'MaxHeap') {
+            await this.insertHeap(value);
+        } else if (!this.root) {
             this.root = new Node(value, canvas.width / 2, 60);
-            if (treeType === 'RBT') this.root.color = 'BLACK';
+            if (treeType === 'RBT' || treeType === 'LLRBT') this.root.color = 'BLACK';
         } else {
             if (treeType === 'BST') {
                 this.insertNode(this.root, value);
@@ -147,9 +152,193 @@ class Tree {
                 this.root = await this.insertAVL(this.root, value);
             } else if (treeType === 'RBT') {
                 await this.insertRBT(value);
+            } else if (treeType === 'LLRBT') {
+                await this.insertLLRBT(this.root, value, (n) => this.root = n);
+                this.root.color = 'BLACK'; // Root is always black
             }
         }
         this.updatePositions();
+        this.updateStats();
+    }
+
+    async insertHeap(value) {
+        // Create new node
+        const newNode = new Node(value, canvas.width / 2, 60);
+        newNode.color = NODE_COLOR;
+
+        // Add to end of heap
+        this.heap.push(newNode);
+        this.relinkHeap();
+        this.updatePositions();
+
+        await waitStep(500);
+
+        // Bubble Up
+        await this.heapifyUp(this.heap.length - 1);
+    }
+
+    async heapifyUp(index) {
+        if (index === 0) return;
+
+        const parentIndex = Math.floor((index - 1) / 2);
+        const parent = this.heap[parentIndex];
+        const current = this.heap[index];
+
+        // Highlight comparison
+        parent.highlightColor = HIGHLIGHT_COLOR;
+        current.highlightColor = HIGHLIGHT_COLOR;
+        await waitStep(500);
+
+        let swapNeeded = false;
+        if (treeType === 'MinHeap' && current.value < parent.value) swapNeeded = true;
+        if (treeType === 'MaxHeap' && current.value > parent.value) swapNeeded = true;
+
+        if (swapNeeded) {
+            // Swap in array
+            [this.heap[parentIndex], this.heap[index]] = [this.heap[index], this.heap[parentIndex]];
+
+            this.relinkHeap();
+            this.updatePositions();
+
+            // Clear highlights 
+            parent.highlightColor = null;
+            current.highlightColor = null;
+
+            await waitStep(500);
+
+            await this.heapifyUp(parentIndex);
+        } else {
+            // Clear highlights
+            parent.highlightColor = null;
+            current.highlightColor = null;
+        }
+    }
+
+    async deleteHeap() {
+        if (this.heap.length === 0) return;
+
+        // Highlight root (to be deleted)
+        this.heap[0].highlightColor = RED_COLOR;
+        await waitStep(500);
+
+        // Move last to root
+        const last = this.heap.pop();
+        if (this.heap.length > 0) {
+            this.heap[0] = last;
+            this.relinkHeap();
+            this.updatePositions();
+            await waitStep(500);
+            await this.heapifyDown(0);
+        } else {
+            this.root = null;
+            this.updatePositions();
+        }
+        this.updateStats();
+        // Ensure root highlight is cleared if it wasn't swapped down
+        if (this.root) this.root.highlightColor = null;
+        this.clearHighlights();
+    }
+
+    async heapifyDown(index) {
+        const leftIdx = 2 * index + 1;
+        const rightIdx = 2 * index + 2;
+        let largestSmallest = index;
+
+        // Compare with Left
+        if (leftIdx < this.heap.length) {
+            this.heap[index].highlightColor = HIGHLIGHT_COLOR;
+            this.heap[leftIdx].highlightColor = HIGHLIGHT_COLOR;
+            await waitStep(300);
+
+            let condition = false;
+            if (treeType === 'MinHeap') condition = this.heap[leftIdx].value < this.heap[largestSmallest].value;
+            if (treeType === 'MaxHeap') condition = this.heap[leftIdx].value > this.heap[largestSmallest].value;
+
+            if (condition) {
+                largestSmallest = leftIdx;
+            }
+            this.heap[index].highlightColor = null;
+            this.heap[leftIdx].highlightColor = null;
+        }
+
+        // Compare with Right
+        if (rightIdx < this.heap.length) {
+            this.heap[largestSmallest].highlightColor = HIGHLIGHT_COLOR;
+            this.heap[rightIdx].highlightColor = HIGHLIGHT_COLOR;
+            await waitStep(300);
+
+            let condition = false;
+            if (treeType === 'MinHeap') condition = this.heap[rightIdx].value < this.heap[largestSmallest].value;
+            if (treeType === 'MaxHeap') condition = this.heap[rightIdx].value > this.heap[largestSmallest].value;
+
+            if (condition) {
+                largestSmallest = rightIdx;
+            }
+            this.heap[largestSmallest].highlightColor = null;
+            this.heap[rightIdx].highlightColor = null;
+        }
+
+        if (largestSmallest !== index) {
+            // Swap
+            [this.heap[index], this.heap[largestSmallest]] = [this.heap[largestSmallest], this.heap[index]];
+            this.relinkHeap();
+            this.updatePositions();
+            await waitStep(500);
+            await this.heapifyDown(largestSmallest);
+        } else {
+            // Ensure highlights are cleared if no swap
+            this.clearHighlights();
+        }
+    }
+
+    relinkHeap() {
+        if (this.heap.length === 0) {
+            this.root = null;
+            return;
+        }
+        this.root = this.heap[0];
+
+        // Clear all links first
+        this.heap.forEach(n => {
+            n.left = null;
+            n.right = null;
+            n.parent = null;
+            n.color = NODE_COLOR; // Reset color to default orange
+        });
+
+        // Rebuild links based on array indices
+        for (let i = 0; i < this.heap.length; i++) {
+            const leftIdx = 2 * i + 1;
+            const rightIdx = 2 * i + 2;
+
+            if (leftIdx < this.heap.length) {
+                this.heap[i].left = this.heap[leftIdx];
+                this.heap[leftIdx].parent = this.heap[i];
+            }
+            if (rightIdx < this.heap.length) {
+                this.heap[i].right = this.heap[rightIdx];
+                this.heap[rightIdx].parent = this.heap[i];
+            }
+        }
+    }
+
+    async buildHeap(values) {
+        this.heap = [];
+        this.root = null;
+
+        for (let v of values) {
+            this.heap.push(new Node(v, canvas.width / 2, 60));
+        }
+        this.relinkHeap();
+        this.updatePositions();
+        await waitStep(1000);
+
+        // Heapify from last non-leaf node down to 0
+        const startIdx = Math.floor(this.heap.length / 2) - 1;
+        for (let i = startIdx; i >= 0; i--) {
+            await this.heapifyDown(i);
+            await waitStep(800); // Slower visualization for Build Heap
+        }
         this.updateStats();
     }
 
@@ -287,6 +476,81 @@ class Tree {
         node.parent = leftChild;
     }
 
+    // --- LLRBT Methods ---
+
+    isRed(node) {
+        if (!node) return false;
+        return node.color === 'RED';
+    }
+
+    async insertLLRBT(node, value, updateLink) {
+        // Standard BST insert
+        if (!node) {
+            const newNode = new Node(value, canvas.width / 2, 60);
+            if (updateLink) updateLink(newNode); // Update parent immediately
+            return newNode;
+        }
+
+        if (value < node.value) {
+            await this.insertLLRBT(node.left, value, (n) => node.left = n);
+        } else if (value > node.value) {
+            await this.insertLLRBT(node.right, value, (n) => node.right = n);
+        } else {
+            return node; // Duplicate
+        }
+
+        // LLRBT fix-up
+
+        // 1. If right child is red and left is black, rotate left
+        if (this.isRed(node.right) && !this.isRed(node.left)) {
+            this.updatePositions();
+            await this.showRotationMessage(node, "Left Rotation (Right Lean)");
+            node = this.rotateLeftLLRBT(node);
+            if (updateLink) updateLink(node); // Update parent immediately after rotation
+        }
+
+        // 2. If left child is red and left-left grandchild is red, rotate right
+        if (this.isRed(node.left) && this.isRed(node.left.left)) {
+            this.updatePositions();
+            await this.showRotationMessage(node, "Right Rotation (2 Reds)");
+            node = this.rotateRightLLRBT(node);
+            if (updateLink) updateLink(node); // Update parent immediately after rotation
+        }
+
+        // 3. If both children are red, flip colors
+        if (this.isRed(node.left) && this.isRed(node.right)) {
+            this.updatePositions();
+            await this.showRotationMessage(node, "Flip Colors");
+            this.flipColors(node);
+        }
+
+        return node;
+    }
+
+    rotateLeftLLRBT(node) {
+        let x = node.right;
+        node.right = x.left;
+        x.left = node;
+        x.color = node.color;
+        node.color = 'RED';
+        return x;
+    }
+
+    rotateRightLLRBT(node) {
+        let x = node.left;
+        node.left = x.right;
+        x.right = node;
+        x.color = node.color;
+        node.color = 'RED';
+        return x;
+    }
+
+    flipColors(node) {
+        node.color = 'RED';
+        node.left.color = 'BLACK';
+        node.right.color = 'BLACK';
+    }
+
     async animateDrop(value, targetX, targetY) {
         this.droppingNode = new Node(value, targetX, -50);
         this.droppingNode.targetY = targetY;
@@ -366,6 +630,11 @@ class Tree {
     }
 
     async delete(value) {
+        if (treeType === 'MinHeap' || treeType === 'MaxHeap') {
+            await this.deleteHeap(); // Deletes root regardless of value input
+            return;
+        }
+
         if (treeType === 'BST') {
             this.root = this.deleteNode(this.root, value);
         } else {
@@ -467,7 +736,12 @@ class Tree {
     async showRotationMessage(node, msg) {
         // In RBT, nodes are Red/Black, so highlight in Orange.
         // In AVL, nodes are Orange, so highlight in Red.
-        node.highlightColor = treeType === 'RBT' ? '#FF9F1C' : '#FF0000';
+        // In RBT, nodes are Red/Black, so highlight in Orange.
+        // In AVL, nodes are Orange, so highlight in Red.
+        // In LLRBT, we DO NOT highlight the node itself, as requested.
+        if (treeType !== 'LLRBT') {
+            node.highlightColor = (treeType === 'RBT') ? '#FF9F1C' : '#FF0000';
+        }
 
         rotationMessage.innerText = `Performing ${msg} on Node ${node.value}`;
         rotationMessage.style.display = 'block';
@@ -622,6 +896,7 @@ class Tree {
 
     clear() {
         this.root = null;
+        this.heap = [];
         this.updatePositions();
         this.updateStats();
         outputPanel.style.display = 'none';
@@ -772,8 +1047,16 @@ function drawConnections(node) {
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
         ctx.lineTo(node.left.x, node.left.y);
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 3;
+
+        // LLRBT: Red link if child is red
+        if (treeType === 'LLRBT' && node.left.color === 'RED') {
+            ctx.strokeStyle = RED_COLOR;
+            ctx.lineWidth = 4;
+        } else {
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+        }
+
         ctx.stroke();
         drawConnections(node.left);
     }
@@ -781,8 +1064,16 @@ function drawConnections(node) {
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
         ctx.lineTo(node.right.x, node.right.y);
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 3;
+
+        // LLRBT: Red link check (though right links shouldn't be red in valid LLRBT, usually)
+        if (treeType === 'LLRBT' && node.right.color === 'RED') {
+            ctx.strokeStyle = RED_COLOR;
+            ctx.lineWidth = 4;
+        } else {
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+        }
+
         ctx.stroke();
         drawConnections(node.right);
     }
@@ -809,12 +1100,24 @@ document.getElementById('insertBtn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('deleteBtn').addEventListener('click', () => {
-    const val = parseInt(valueInput.value);
-    if (!isNaN(val)) {
-        bst.delete(val);
-        valueInput.value = '';
+document.getElementById('deleteBtn').addEventListener('click', async () => {
+    const value = parseInt(valueInput.value);
+
+    // If using MinHeap or MaxHeap, we don't need a value input (deletes root)
+    if ((treeType === 'MinHeap' || treeType === 'MaxHeap')) {
+        toggleButtons(true);
+        await bst.delete(null); // Value doesn't matter for heap delete
+        toggleButtons(false);
+        return;
     }
+
+    if (isNaN(value)) {
+        alert('Please enter a value to delete');
+        return;
+    }
+    toggleButtons(true);
+    await bst.delete(value);
+    toggleButtons(false);
 });
 
 document.getElementById('searchBtn').addEventListener('click', async () => {
@@ -825,7 +1128,6 @@ document.getElementById('searchBtn').addEventListener('click', async () => {
         toggleButtons(false);
     }
 });
-
 document.getElementById('preOrderBtn').addEventListener('click', async () => {
     toggleButtons(true);
     await bst.preOrder();
@@ -845,15 +1147,27 @@ document.getElementById('postOrderBtn').addEventListener('click', async () => {
 });
 
 document.getElementById('balanceBtn').addEventListener('click', () => bst.balance());
+document.getElementById('buildHeapBtn').addEventListener('click', () => {
+    // Generate random values for Build Heap
+    const values = [];
+    for (let i = 0; i < 15; i++) values.push(Math.floor(Math.random() * 100) + 1);
+    bst.buildHeap(values);
+});
 document.getElementById('clearBtn').addEventListener('click', () => bst.clear());
 
 document.getElementById('randomBtn').addEventListener('click', async () => {
     toggleButtons(true);
     bst.clear(); // Clear existing tree first
+    const usedValues = new Set();
     for (let i = 0; i < 15; i++) {
-        const val = Math.floor(Math.random() * 100) + 1;
+        let val;
+        do {
+            val = Math.floor(Math.random() * 100) + 1;
+        } while (usedValues.has(val));
+        usedValues.add(val);
+
         await bst.insert(val); // Await the insert (which handles animation/delays)
-        await waitStep(200); // Small extra delay between numbers
+        await waitStep(800); // Slower extra delay between numbers
     }
     toggleButtons(false);
 });
@@ -885,6 +1199,7 @@ nextStepBtn.addEventListener('click', () => {
 treeTypeSelect.addEventListener('change', (e) => {
     treeType = e.target.value;
     bst.clear();
+    updateButtonStates();
 });
 
 function toggleButtons(disabled) {
@@ -900,3 +1215,37 @@ window.addEventListener('resize', () => {
 
 // Start animation
 animate();
+updateButtonStates();
+
+function updateButtonStates() {
+    const btnsToHide = [
+        document.getElementById('deleteBtn'),
+        document.getElementById('preOrderBtn'),
+        document.getElementById('inOrderBtn'),
+        document.getElementById('postOrderBtn'),
+        document.getElementById('balanceBtn')
+    ];
+    const buildHeapBtn = document.getElementById('buildHeapBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const searchBtn = document.getElementById('searchBtn');
+
+    if (treeType === 'LLRBT') {
+        btnsToHide.forEach(btn => btn.style.display = 'none');
+        buildHeapBtn.style.display = 'none';
+        searchBtn.disabled = false; // Search works for LLRBT/BST/AVL
+    } else if (treeType === 'MinHeap' || treeType === 'MaxHeap') {
+        btnsToHide.forEach(btn => btn.style.display = 'none');
+        // Show delete (modified) and build heap
+        deleteBtn.innerText = (treeType === 'MinHeap') ? "Del Min" : "Del Max";
+        deleteBtn.style.display = 'inline-block';
+        buildHeapBtn.style.display = 'inline-block';
+        searchBtn.disabled = true; // No efficient search in Heap, user requested removal
+        searchBtn.style.display = 'none';
+    } else {
+        btnsToHide.forEach(btn => btn.style.display = 'inline-block');
+        deleteBtn.innerText = "Delete";
+        buildHeapBtn.style.display = 'none';
+        searchBtn.disabled = false;
+        searchBtn.style.display = 'inline-block';
+    }
+}
